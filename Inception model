@@ -1,0 +1,98 @@
+# data augmentation and normalisation for inception model
+from torchvision import transforms
+
+data_transforms = {
+    'train': transforms.Compose([
+        transforms.Resize((299, 299)),  # InceptionV3 requirement
+        transforms.RandomHorizontalFlip(),
+        transforms.RandomRotation(15),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                             std=[0.229, 0.224, 0.225]),
+    ]),
+    'val': transforms.Compose([
+        transforms.Resize((299, 299)),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                             std=[0.229, 0.224, 0.225]),
+    ]),
+}
+
+
+# data loading for the inception model
+from torchvision.datasets import ImageFolder
+from torch.utils.data import DataLoader
+
+train_dir = '/content/processed/Training'
+val_dir = '/content/processed/Testing'
+
+train_dataset = ImageFolder(root=train_dir, transform=data_transforms['train'])
+val_dataset = ImageFolder(root=val_dir, transform=data_transforms['val'])
+
+train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
+val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False)
+
+print(f"Training data: {len(train_loader.dataset)} images")
+print(f"Validation data: {len(val_loader.dataset)} images")
+
+
+
+# training the inception model
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torchvision import models
+
+# Load InceptionV3
+model = models.inception_v3(pretrained=True, aux_logits=True)
+
+# Update final classifier
+model.fc = nn.Linear(model.fc.in_features, 4)  # 4 classes
+
+# Update auxiliary classifier too (Inception has two outputs during training)
+if model.aux_logits:
+    model.AuxLogits.fc = nn.Linear(model.AuxLogits.fc.in_features, 4)
+
+# Move to GPU if available
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+model = model.to(device)
+
+# Loss and Optimizer
+criterion = nn.CrossEntropyLoss()
+optimizer = optim.Adam(model.parameters(), lr=0.001)
+
+# Training Loop
+num_epochs = 25
+
+for epoch in range(num_epochs):
+    model.train()
+    running_loss = 0.0
+    correct_predictions = 0
+    total_predictions = 0
+
+    for inputs, labels in train_loader:
+        inputs, labels = inputs.to(device), labels.to(device)
+
+        optimizer.zero_grad()
+
+        # InceptionV3 returns (main_output, aux_output)
+        outputs, aux_outputs = model(inputs)
+
+        loss1 = criterion(outputs, labels)
+        loss2 = criterion(aux_outputs, labels)
+        loss = loss1 + 0.4 * loss2  # Combine both losses
+
+        loss.backward()
+        optimizer.step()
+
+        _, predicted = torch.max(outputs, 1)
+        correct_predictions += (predicted == labels).sum().item()
+        total_predictions += labels.size(0)
+        running_loss += loss.item()
+
+    epoch_loss = running_loss / len(train_loader)
+    epoch_accuracy = 100 * correct_predictions / total_predictions
+
+    print(f"Epoch [{epoch+1}/{num_epochs}], Loss: {epoch_loss:.4f}, Accuracy: {epoch_accuracy:.2f}%")
+
+print("\n Training with InceptionV3 completed successfully.")
