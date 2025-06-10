@@ -1,0 +1,12 @@
+# Checking the variance of each optimiser in my Inception Pre trained Model for Brain tumor detection using federated leaning
+
+Optimiser 
+
+Sno 	Optimiser	Model	Accuracy	Validation loss	Validation Accuracy
+1	Adam	Inception 	99.23	0.0183	99.47%
+2	SGD	Inception	99.79		
+3	AdamW	Inception	98.37%	0.0928	96.72%
+4	Adagrad	Inception	99.93%	0.0100	99.62%
+5	RMSprop
+	Inception	83.18%		
+			
